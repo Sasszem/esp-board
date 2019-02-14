@@ -73,7 +73,11 @@ public:
 
   void setRowOffsets(int row1, int row2, int row3, int row4);
   void createChar(uint8_t, uint8_t[]);
-  void setCursor(uint8_t, uint8_t); 
+  void setCursor(uint8_t, uint8_t);
+
+  void backlight();
+  void noBacklight();
+  
   virtual size_t write(uint8_t);
   void command(uint8_t);
   
@@ -94,7 +98,7 @@ private:
   uint8_t _rs_bit;
   uint8_t _data_bits[8];
   ShiftRegister *_reg;
-
+  uint8_t _backlight_bit = 5;
   uint8_t _numlines;
   uint8_t _row_offsets[4];
 };

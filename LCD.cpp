@@ -61,44 +61,36 @@ void LCD::begin(uint8_t cols, uint8_t lines, uint8_t dotsize) {
   
 
     // we start in 8bit mode, try to set 4 bit mode
-    Serial.println("Sending 0x3");
     write4bits(0x03, false);
     delayMicroseconds(4500); // wait min 4.1ms
 
     // second try
-    Serial.println("Sending 0x3");
     write4bits(0x03, false);
     delayMicroseconds(4500); // wait min 4.1ms
     
     // third go!
-    Serial.println("Sending 0x3");
     write4bits(0x03, false); 
     delayMicroseconds(150);
 
     // finally, set to 4-bit interface
-    Serial.println("Sending 0x2");
     write4bits(0x02, false); 
 
   
   // finally, set # lines, font size, etc.
-  Serial.println("Sending LCD_FUNCTIONSET");
   command(LCD_FUNCTIONSET | _displayfunction);  
 
   // turn the display on with no cursor or blinking default
   _displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;  
-  Serial.println("display()");
   display();
 
   // clear it off
-  Serial.println("clear()");
   clear();
 
   // Initialize to default text direction (for romance languages)
   _displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
   // set the entry mode
-  Serial.println("set direction");
   command(LCD_ENTRYMODESET | _displaymode);
-
+  backlight();
 }
 
 void LCD::setRowOffsets(int row0, int row1, int row2, int row3)
@@ -207,6 +199,14 @@ void LCD::createChar(uint8_t location, uint8_t charmap[]) {
   }
 }
 
+
+void LCD::backlight() {
+  _reg->set(_reg->value | (1<<_backlight_bit));
+}
+void LCD::noBacklight() {
+  _reg->set(_reg->value & ~(1<<_backlight_bit));
+}
+
 /*********** mid level commands, for sending data/cmds */
 
 inline void LCD::command(uint8_t value) {
@@ -236,6 +236,7 @@ void LCD::pulseEnable(void) {
 }
 
 void LCD::write4bits(uint8_t value, bool RS) {
+  uint8_t old_value = _reg->value;
   uint8_t to_write = 0;
   for (int i = 0; i < 4; i++) {
     to_write |= (((value >> i) & 0x01)<<_data_bits[i]);
@@ -246,8 +247,9 @@ void LCD::write4bits(uint8_t value, bool RS) {
     to_write |= 1<<_rs_bit;
   }
   
-  _reg->set(to_write, true);
-
+  _reg->set(to_write);
   pulseEnable();
+
+  _reg->set(old_value);
 }
 
