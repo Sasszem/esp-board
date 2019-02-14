@@ -23,7 +23,7 @@ void Matrix::update()
   for (int j = 0; j<3; j++)
   {
       auto s = digitalRead(d[j]);
-      if (s)
+      if (s==0)
       {
         Serial.print("row=");
       Serial.print(row);
