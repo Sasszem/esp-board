@@ -1,44 +1,39 @@
+#pragma once
 #include <FS.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <LuaWrapper.h>
-#include "shift.hpp"
-#include "matrix.hpp"
 #include "tasks.hpp"
-
+#include "IO.h"
 TaskManager TM;
-
+IO io;
 #include "network.hpp"
-
 Network network;
-ShiftRegister shift(16,15);
-Matrix matrix(D5, 12, D7, &shift);
-//LiquidCrystal lcd(D3, &shift);
 
 bool state = false;
 void led_task()
 {
   //digitalWrite(LED_BUILTIN, state);
   //state = !state;
-  digitalWrite(LED_BUILTIN, !matrix.state[0][1]);
+  digitalWrite(LED_BUILTIN, !io.matrix.state[0][1]);
 }
 
 void setLCD_task()
 {
-  if (matrix.state[0][0])
+  if (io.matrix.state[0][0])
   {
-    shift.set(0);
+    io.lcd.noBacklight();
     Serial.println("LCD OFF");
   }
-  if (matrix.state[0][1])
+  if (io.matrix.state[0][1])
   {
-    shift.set(255);
+    io.lcd.backlight();
     Serial.println("LCD_ON");
   }
 }
-void updateMatrix_task()
+void updateIO_task()
 {
-  matrix.update();
+  io.update();
 }
 
 
@@ -50,13 +45,18 @@ void setup() {
   SPIFFS.begin();
   Serial.println("\n");
   Serial.println("Begin booting...");
+  io.lcd.begin(16,2);
+  
+  //lcd.blink();
+  //lcd.cursor();
   network.load_aps();
 
   unsigned int t = millis();
 
   TM.add_task(&led_task, 150, t);
-  TM.add_task(&updateMatrix_task, 50, t);
+  TM.add_task(&updateIO_task, 50, t);
   TM.add_task(&setLCD_task, 100, t);
+  io.lcd.print("hello, world!");
 }
 
 
