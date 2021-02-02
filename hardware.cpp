@@ -1,9 +1,96 @@
-#include "LCD.h"
+// hardware.cpp
+// basic IO utilities
+#include "hardware.hpp"
+#include "Arduino.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include "Arduino.h"
+
+board::ShiftRegister::ShiftRegister(int data, int clock)
+{
+    dataPin = data;
+    clockPin = clock;
+    pinMode(dataPin, OUTPUT);
+    pinMode(clockPin, OUTPUT);
+}
+
+void board::ShiftRegister::set(int value)
+{
+    shiftOut(dataPin, clockPin, MSBFIRST, value);
+    this->value = value;
+}
+
+board::Matrix::Matrix(int d1, int d2, int d3, ShiftRegister *r)
+{
+    reg = r;
+    d[0] = d1;
+    d[1] = d2;
+    d[2] = d3;
+    for (int i = 0; i<3; i++)
+    {
+        pinMode(d[i], INPUT_PULLUP);
+    }
+    row = 0;
+}
+
+void board::Matrix::update()
+{
+  int val = reg->value & 0xf0;
+  val |= (~(1<<row))&0xf;
+  reg->set(val);
+  for (int j = 0; j<3; j++)
+  {
+      auto s = digitalRead(d[j]);
+      state[row][j] = (s==0);
+  }
+  row = (row + 1)%1;
+}
+
+void board::IO::update()
+{
+  matrix.update();
+}
+
+// LCD constants
+
+// commands
+#define LCD_CLEARDISPLAY 0x01
+#define LCD_RETURNHOME 0x02
+#define LCD_ENTRYMODESET 0x04
+#define LCD_DISPLAYCONTROL 0x08
+#define LCD_CURSORSHIFT 0x10
+#define LCD_FUNCTIONSET 0x20
+#define LCD_SETCGRAMADDR 0x40
+#define LCD_SETDDRAMADDR 0x80
+
+// flags for display entry mode
+#define LCD_ENTRYRIGHT 0x00
+#define LCD_ENTRYLEFT 0x02
+#define LCD_ENTRYSHIFTINCREMENT 0x01
+#define LCD_ENTRYSHIFTDECREMENT 0x00
+
+// flags for display on/off control
+#define LCD_DISPLAYON 0x04
+#define LCD_DISPLAYOFF 0x00
+#define LCD_CURSORON 0x02
+#define LCD_CURSOROFF 0x00
+#define LCD_BLINKON 0x01
+#define LCD_BLINKOFF 0x00
+
+// flags for display/cursor shift
+#define LCD_DISPLAYMOVE 0x08
+#define LCD_CURSORMOVE 0x00
+#define LCD_MOVERIGHT 0x04
+#define LCD_MOVELEFT 0x00
+
+// flags for function set
+#define LCD_8BITMODE 0x10
+#define LCD_4BITMODE 0x00
+#define LCD_2LINE 0x08
+#define LCD_1LINE 0x00
+#define LCD_5x10DOTS 0x04
+#define LCD_5x8DOTS 0x00
 
 
 
@@ -26,8 +113,7 @@
 // can't assume that its in that state when a sketch starts (and the
 // LCD constructor is called).
 
-
-LCD::LCD(uint8_t enable, ShiftRegister *reg, int d4, int d5, int d6, int d7, int RS)
+board::LCD_custom::LCD_custom(uint8_t enable, ShiftRegister *reg, int d4, int d5, int d6, int d7, int RS)
 {
   _enable_pin = enable;
   _rs_bit = RS;
@@ -41,7 +127,7 @@ LCD::LCD(uint8_t enable, ShiftRegister *reg, int d4, int d5, int d6, int d7, int
   begin(16, 1);  
 }
 
-void LCD::begin(uint8_t cols, uint8_t lines, uint8_t dotsize) {
+void board::LCD_custom::begin(uint8_t cols, uint8_t lines, uint8_t dotsize) {
   if (lines > 1) {
     _displayfunction |= LCD_2LINE;
   }
@@ -93,7 +179,7 @@ void LCD::begin(uint8_t cols, uint8_t lines, uint8_t dotsize) {
   backlight();
 }
 
-void LCD::setRowOffsets(int row0, int row1, int row2, int row3)
+void board::LCD_custom::setRowOffsets(int row0, int row1, int row2, int row3)
 {
   _row_offsets[0] = row0;
   _row_offsets[1] = row1;
@@ -102,19 +188,19 @@ void LCD::setRowOffsets(int row0, int row1, int row2, int row3)
 }
 
 /********** high level commands, for the user! */
-void LCD::clear()
+void board::LCD_custom::clear()
 {
   command(LCD_CLEARDISPLAY);  // clear display, set cursor position to zero
   delayMicroseconds(2000);  // this command takes a long time!
 }
 
-void LCD::home()
+void board::LCD_custom::home()
 {
   command(LCD_RETURNHOME);  // set cursor position to zero
   delayMicroseconds(2000);  // this command takes a long time!
 }
 
-void LCD::setCursor(uint8_t col, uint8_t row)
+void board::LCD_custom::setCursor(uint8_t col, uint8_t row)
 {
   const size_t max_lines = sizeof(_row_offsets) / sizeof(*_row_offsets);
   if ( row >= max_lines ) {
@@ -128,70 +214,70 @@ void LCD::setCursor(uint8_t col, uint8_t row)
 }
 
 // Turn the display on/off (quickly)
-void LCD::noDisplay() {
+void board::LCD_custom::noDisplay() {
   _displaycontrol &= ~LCD_DISPLAYON;
   command(LCD_DISPLAYCONTROL | _displaycontrol);
 }
-void LCD::display() {
+void board::LCD_custom::display() {
   _displaycontrol |= LCD_DISPLAYON;
   command(LCD_DISPLAYCONTROL | _displaycontrol);
 }
 
 // Turns the underline cursor on/off
-void LCD::noCursor() {
+void board::LCD_custom::noCursor() {
   _displaycontrol &= ~LCD_CURSORON;
   command(LCD_DISPLAYCONTROL | _displaycontrol);
 }
-void LCD::cursor() {
+void board::LCD_custom::cursor() {
   _displaycontrol |= LCD_CURSORON;
   command(LCD_DISPLAYCONTROL | _displaycontrol);
 }
 
 // Turn on and off the blinking cursor
-void LCD::noBlink() {
+void board::LCD_custom::noBlink() {
   _displaycontrol &= ~LCD_BLINKON;
   command(LCD_DISPLAYCONTROL | _displaycontrol);
 }
-void LCD::blink() {
+void board::LCD_custom::blink() {
   _displaycontrol |= LCD_BLINKON;
   command(LCD_DISPLAYCONTROL | _displaycontrol);
 }
 
 // These commands scroll the display without changing the RAM
-void LCD::scrollDisplayLeft(void) {
+void board::LCD_custom::scrollDisplayLeft(void) {
   command(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
 }
-void LCD::scrollDisplayRight(void) {
+void board::LCD_custom::scrollDisplayRight(void) {
   command(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
 }
 
 // This is for text that flows Left to Right
-void LCD::leftToRight(void) {
+void board::LCD_custom::leftToRight(void) {
   _displaymode |= LCD_ENTRYLEFT;
   command(LCD_ENTRYMODESET | _displaymode);
 }
 
 // This is for text that flows Right to Left
-void LCD::rightToLeft(void) {
+void board::LCD_custom::rightToLeft(void) {
   _displaymode &= ~LCD_ENTRYLEFT;
   command(LCD_ENTRYMODESET | _displaymode);
 }
 
 // This will 'right justify' text from the cursor
-void LCD::autoscroll(void) {
+void board::LCD_custom::autoscroll(void) {
   _displaymode |= LCD_ENTRYSHIFTINCREMENT;
   command(LCD_ENTRYMODESET | _displaymode);
 }
 
 // This will 'left justify' text from the cursor
-void LCD::noAutoscroll(void) {
+void board::LCD_custom::noAutoscroll(void) {
   _displaymode &= ~LCD_ENTRYSHIFTINCREMENT;
   command(LCD_ENTRYMODESET | _displaymode);
 }
 
 // Allows us to fill the first 8 CGRAM locations
 // with custom characters
-void LCD::createChar(uint8_t location, uint8_t charmap[]) {
+void board::LCD_custom::createChar(uint8_t location, uint8_t charmap[]) {
   location &= 0x7; // we only have 8 locations 0-7
   command(LCD_SETCGRAMADDR | (location << 3));
   for (int i=0; i<8; i++) {
@@ -200,20 +286,20 @@ void LCD::createChar(uint8_t location, uint8_t charmap[]) {
 }
 
 
-void LCD::backlight() {
+void board::LCD_custom::backlight() {
   _reg->set(_reg->value | (1<<_backlight_bit));
 }
-void LCD::noBacklight() {
+void board::LCD_custom::noBacklight() {
   _reg->set(_reg->value & ~(1<<_backlight_bit));
 }
 
 /*********** mid level commands, for sending data/cmds */
 
-inline void LCD::command(uint8_t value) {
+inline void board::LCD_custom::command(uint8_t value) {
   send(value, LOW);
 }
 
-inline size_t LCD::write(uint8_t value) {
+inline size_t board::LCD_custom::write(uint8_t value) {
   send(value, HIGH);
   return 1; // assume sucess
 }
@@ -221,12 +307,12 @@ inline size_t LCD::write(uint8_t value) {
 /************ low level data pushing commands **********/
 
 // write either command or data, with automatic 4/8-bit selection
-void LCD::send(uint8_t value, uint8_t mode) {
+void board::LCD_custom::send(uint8_t value, uint8_t mode) {
     write4bits(value>>4, mode==HIGH);
     write4bits(value, mode==HIGH);
 }
 
-void LCD::pulseEnable(void) {
+void board::LCD_custom::pulseEnable(void) {
   digitalWrite(_enable_pin, LOW);
   delayMicroseconds(1);    
   digitalWrite(_enable_pin, HIGH);
@@ -235,7 +321,7 @@ void LCD::pulseEnable(void) {
   delayMicroseconds(100);   // commands need > 37us to settle
 }
 
-void LCD::write4bits(uint8_t value, bool RS) {
+void board::LCD_custom::write4bits(uint8_t value, bool RS) {
   uint8_t old_value = _reg->value;
   uint8_t to_write = 0;
   for (int i = 0; i < 4; i++) {
@@ -252,4 +338,3 @@ void LCD::write4bits(uint8_t value, bool RS) {
 
   _reg->set(old_value);
 }
-

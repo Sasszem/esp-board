@@ -1,82 +1,64 @@
 #pragma once
-#include <FS.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WiFiMulti.h>
-#include <LuaWrapper.h>
-#include "tasks.hpp"
-#include "IO.h"
-TaskManager TM;
-IO io;
-#include "network.hpp"
-Network network;
+#include <ESP8266HTTPClient.h>
+#include "system.hpp"
 
-bool state = false;
-void led_task()
+espSystem::System sys;
+
+void led_task(espSystem::System *sys)
 {
-  //digitalWrite(LED_BUILTIN, state);
-  //state = !state;
-  digitalWrite(LED_BUILTIN, !io.matrix.state[0][1]);
+  digitalWrite(LED_BUILTIN, !sys->io.matrix.state[0][1]);
 }
 
-void setLCD_task()
+void setLCD_task(espSystem::System* sys)
 {
-  if (io.matrix.state[0][0])
+  if (sys->io.matrix.state[0][0])
   {
-    io.lcd.noBacklight();
+    sys->io.lcd.noBacklight();
     Serial.println("LCD OFF");
   }
-  if (io.matrix.state[0][1])
+  if (sys->io.matrix.state[0][1])
   {
-    io.lcd.backlight();
+    sys->io.lcd.backlight();
     Serial.println("LCD_ON");
   }
 }
-void updateIO_task()
-{
-  io.update();
-}
 
+void sendRequest_task(espSystem::System* sys) {
+  if (sys->io.matrix.state[0][2])
+  {
+    sys->io.lcd.clear();
+    HTTPClient http;
+    // Your Domain name with URL path or IP address with path
+      http.begin("http://sassze.github.io");
+      
+      // Send HTTP GET request
+      int httpResponseCode = http.GET();
+      
+      if (httpResponseCode>0) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        String payload = http.getString();
+        Serial.println(payload);
+        sys->io.lcd.write(payload.c_str());
+      }
+      else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+        sys->io.lcd.write("Error: ");
+        sys->io.lcd.write(httpResponseCode);
+      }
+      // Free resources
+      http.end();
+  }
+}
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  Serial.begin(115200);
-  SPIFFS.begin();
-  Serial.println("\n");
-  Serial.println("Begin booting...");
-  io.lcd.begin(16,2);
-  
-  //lcd.blink();
-  //lcd.cursor();
-  network.load_aps();
-
-  unsigned int t = millis();
-
-  TM.add_task(&led_task, 150, t);
-  TM.add_task(&updateIO_task, 50, t);
-  TM.add_task(&setLCD_task, 100, t);
-  io.lcd.print("hello, world!");
+  sys.TM.add_task(&led_task, 150, 100);
+  sys.TM.add_task(&setLCD_task, 100, 100);
+  sys.TM.add_task(&sendRequest_task, 100, 100);
 }
-
 
 
 void loop() {
-  int t = millis();
-  TM.update(t);
-  
-  // put your main code here, to run repeatedly:
-  network.run();
-  /*
-  Serial.println("Matrix state: ");
-  for (int i = 0; i<4; i++)
-  {
-    for (int j = 0; j<3; j++)
-    {
-      Serial.print(matrix.state[i][j]);
-      Serial.write(" ");
-    }
-    Serial.println();
-  }*/
+  sys.update();
 }
-
